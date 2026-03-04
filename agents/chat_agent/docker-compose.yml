@@ -1,0 +1,29 @@
+name: multi-agent
+services:
+  qa-agent:
+    build: .
+    ports:
+      - "8093:8000"
+    env_file:
+      - .env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - myvng-multi-agent
+    # depends_on:
+    #   - redis
+    # redis:
+    #   image: redis:alpine
+    #   networks:
+    #     - myvng-multi-agent
+    #   ports:
+    #     - 6379
+
+networks:
+  myvng-multi-agent:
+    external: true
