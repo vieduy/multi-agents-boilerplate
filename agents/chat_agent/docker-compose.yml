@@ -1,6 +1,6 @@
 name: multi-agent
 services:
-  qa-agent:
+  chat-agent:
     build: .
     ports:
       - "8093:8000"
