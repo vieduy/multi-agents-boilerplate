@@ -44,36 +44,47 @@ def invoke_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
     Invoke a tool on the Tool Executor service (POST /invoke).
     Requires TOOL_EXECUTOR_URL. Session attributes come from request context.
     """
+    logger.info(f"🔧 invoke_tool called: tool_name={tool_name}, arguments={arguments}")
+    logger.info(f"🌐 TOOL_EXECUTOR_URL={TOOL_EXECUTOR_URL}")
+
     if not TOOL_EXECUTOR_URL:
+        error_msg = "Tool Executor service not configured. Set TOOL_EXECUTOR_URL (e.g. http://tool-execution-service:8091)."
+        logger.error(f"❌ {error_msg}")
         return {
-            "error": "Tool Executor service not configured. Set TOOL_EXECUTOR_URL (e.g. http://tool-execution-service:8091).",
+            "error": error_msg,
             "authorized": False,
         }
 
     session_attrs = get_session_attributes()
-    logger.debug(f"session_attrs: {session_attrs}")
+    logger.info(f"📋 session_attrs: {session_attrs}")
     
     # Check for JWT token
     jwt_token = session_attrs.get("jwt_token") or session_attrs.get("oauth_token")
     if not jwt_token:
         # Fallback to env for local development
         jwt_token = os.environ.get("AGENT_API_TOKEN", "")
-    
+        logger.info(f"🔑 No JWT in session, using AGENT_API_TOKEN from env: {'✓ set' if jwt_token else '✗ not set'}")
+    else:
+        logger.info(f"🔑 JWT token found in session attributes")
+
     # Decode JWT token and extract auth attributes
     auth_attributes = {}
     if jwt_token:
         decoded_payload = decode_jwt_payload(jwt_token)
-        logger.debug(f"decoded_payload: {decoded_payload}")
+        logger.info(f"🔓 decoded_payload: {decoded_payload}")
         if decoded_payload:
             # Extract auth attributes from JWT payload
             auth_attributes = {
                 "sub": decoded_payload.get("sub"),
                 "user_id": decoded_payload.get("user_id") or decoded_payload.get("sub"),
             }
+            logger.info(f"👤 auth_attributes: {auth_attributes}")
     else:
         # No JWT token, return error
+        error_msg = "No JWT token found in session attributes"
+        logger.error(f"❌ {error_msg}")
         return {
-            "error": "No JWT token found in session attributes",
+            "error": error_msg,
             "authorized": False,
         }
     
@@ -96,6 +107,8 @@ def invoke_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
     last_error = None
     for api_path in api_paths:
         try:
+            logger.info(f"📡 Attempting to call: {api_path}")
+            logger.info(f"📦 Request payload: {json.dumps(event, indent=2)}")
             req = urllib.request.Request(
                 api_path,
                 data=json.dumps(event).encode("utf-8"),
@@ -104,6 +117,7 @@ def invoke_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
             )
             with urllib.request.urlopen(req, timeout=60) as resp:
                 body = resp.read().decode("utf-8")
+                logger.info(f"✅ Tool executor response: {body}")
                 result = json.loads(body)
                 # If result is a dict with "result" key, extract it
                 if isinstance(result, dict) and "result" in result:
@@ -111,17 +125,22 @@ def invoke_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
                 return result
         except urllib.error.HTTPError as e:
             last_error = e
+            logger.warning(f"⚠️  HTTP error {e.code} calling {api_path}: {e}")
             if e.code == 404 and api_path == api_paths[0]:
+                logger.info(f"🔄 Trying legacy endpoint...")
                 continue
             try:
                 err_body = e.read().decode("utf-8")
+                logger.error(f"❌ Error response body: {err_body}")
                 return json.loads(err_body)
             except Exception:
                 return {"error": str(e), "status": e.code}
         except OSError as e:
             last_error = e
+            logger.error(f"❌ OSError calling {api_path}: {e}")
             if api_path == api_paths[-1]:
                 return {"error": f"Tool Execution Service unreachable: {e!s}", "authorized": False}
+            logger.info(f"🔄 Trying next endpoint...")
             continue
     
     if last_error:

@@ -38,7 +38,7 @@ export default function AgentStatusPanel({
     };
 
     return (
-        <aside className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-3 sm:gap-4 h-full overflow-y-auto">
+        <aside className="flex flex-col gap-3 sm:gap-4 w-full">
             {/* User Profile section */}
             {user && (
                 <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-3 sm:p-4 backdrop-blur-sm">

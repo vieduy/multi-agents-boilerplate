@@ -1,0 +1,101 @@
+version: '3.8'
+
+# Development override for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+name: multi-agent-system-dev
+
+services:
+  # ============================================
+  # Frontend - Development Mode with Hot Reload
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_AUTH_SERVICE_URL=http://localhost:8001
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    command: npm run dev
+
+  # ============================================
+  # Agent Router - Development with Hot Reload
+  # ============================================
+  agent-router:
+    volumes:
+      - ./agent-router/src:/app/src
+      - ./agent-router/data:/app/data
+      # - ./agent-router/config:/app/config
+      - ./agent-router/logs:/app/logs
+    ports:
+      - "8000:8000"
+    command: uvicorn agent_router.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ============================================
+  # Auth Service - Development
+  # ============================================
+  auth-service:
+    volumes:
+      - ./auth-service/src:/app/src
+    ports:
+      - "8001:8001"
+    environment:
+      - CORS_ORIGINS=http://localhost:3000,http://localhost
+
+  # ============================================
+  # Secrets Manager - Development
+  # ============================================
+  secrets-manager:
+    volumes:
+      - ./secrets-manager/src:/app/src
+    ports:
+      - "8092:8092"
+
+  # ============================================
+  # Tool Executor - Development
+  # ============================================
+  tool-executor:
+    volumes:
+      - ./tool-executor/src:/app/src
+    ports:
+      - "8091:8091"
+
+  # ============================================
+  # Databases - Expose ports for local access
+  # ============================================
+  router-mongo:
+    ports:
+      - "27017:27017"
+
+  auth-mongo:
+    ports:
+      - "27018:27017"
+
+  secrets-mongo:
+    ports:
+      - "27019:27017"
+
+  router-redis:
+    ports:
+      - "6380:6379"
+
+  # ============================================
+  # Redis - Agents Development (exposed port)
+  # ============================================
+  redis:
+    ports:
+      - "6381:6379"
+
+  # ============================================
+  # Disable Nginx in development
+  # ============================================
+  nginx:
+    profiles:
+      - production

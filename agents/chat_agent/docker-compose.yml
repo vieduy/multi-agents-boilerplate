@@ -1,4 +1,4 @@
-name: multi-agent
+name: multi-agent-system-dev
 services:
   chat-agent:
     build: .
@@ -15,14 +15,24 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - myvng-multi-agent
-    # depends_on:
-    #   - redis
-    # redis:
-    #   image: redis:alpine
-    #   networks:
-    #     - myvng-multi-agent
-    #   ports:
-    #     - 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: chat-agent-redis
+    networks:
+      - myvng-multi-agent
+    expose:
+      - "6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    command: redis-server --appendonly yes
 
 networks:
   myvng-multi-agent:
