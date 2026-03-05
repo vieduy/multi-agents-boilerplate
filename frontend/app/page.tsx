@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { AgentInfo, ChatMessage } from "@/types";
+import { AgentInfo, ChatMessage, PermissionRequest } from "@/types";
 import { createSession, checkAllAgentsHealth } from "@/lib/api";
 import { streamRoute } from "@/lib/sse";
 import ChatMessageBubble from "@/components/ChatMessage";
@@ -48,6 +48,7 @@ function ChatPageContent() {
   const [isStreamingEnabled, setIsStreamingEnabled] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastUserQueryRef = useRef<string>("");
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -183,9 +184,20 @@ function ChatPageContent() {
     }
   }, [accessToken, sessionId]);
 
+  const handleSendRef = useRef<((text: string) => void) | null>(null);
+
+  const handleRetryAfterAuth = useCallback(() => {
+    const lastQuery = lastUserQueryRef.current;
+    if (lastQuery && handleSendRef.current) {
+      handleSendRef.current(lastQuery);
+    }
+  }, []);
+
   const handleSend = useCallback(
     async (text: string) => {
       if (streaming) return;
+
+      lastUserQueryRef.current = text;
 
       // Add user message
       const userMsg: ChatMessage = {
@@ -290,6 +302,13 @@ function ChatPageContent() {
             });
           });
         },
+        onPermissionRequired(permission: PermissionRequest) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, permissionRequest: permission } : m
+            )
+          );
+        },
         onDone() {
           setThinking(false);
           setStreaming(false);
@@ -329,6 +348,8 @@ function ChatPageContent() {
     },
     [sessionId, streaming, isStreamingEnabled, accessToken]
   );
+
+  handleSendRef.current = handleSend;
 
   return (
     <div className="flex flex-col lg:flex-row h-screen bg-slate-950 text-slate-100 overflow-hidden">
@@ -399,7 +420,11 @@ function ChatPageContent() {
           )}
 
           {messages.map((msg) => (
-            <ChatMessageBubble key={msg.id} message={msg} />
+            <ChatMessageBubble
+              key={msg.id}
+              message={msg}
+              onPermissionAuthorized={msg.permissionRequest ? handleRetryAfterAuth : undefined}
+            />
           ))}
 
           {thinking && <ThinkingIndicator />}

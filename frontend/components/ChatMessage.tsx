@@ -4,6 +4,7 @@ import { ChatMessage } from "@/types";
 import { clsx } from "clsx";
 import { User, Bot, Sparkles, Loader2 } from "lucide-react";
 import ToolCallCard from "./ToolCall";
+import PermissionRequestCard from "./PermissionRequestCard";
 
 const AGENT_COLORS: Record<string, { bg: string; border: string; text: string; icon: string }> = {
     "qa-agent": {
@@ -33,9 +34,10 @@ function getAgentStyle(agentId?: string) {
 
 interface Props {
     message: ChatMessage;
+    onPermissionAuthorized?: () => void;
 }
 
-export default function ChatMessageBubble({ message }: Props) {
+export default function ChatMessageBubble({ message, onPermissionAuthorized }: Props) {
     const isUser = message.role === "user";
     const style = getAgentStyle(message.agentId);
 
@@ -101,6 +103,16 @@ export default function ChatMessageBubble({ message }: Props) {
                             {message.toolCalls.map((tc) => (
                                 <ToolCallCard key={tc.id} toolCall={tc} />
                             ))}
+                        </div>
+                    )}
+
+                    {/* Permission Request */}
+                    {message.permissionRequest && (
+                        <div className="w-full max-w-xs sm:max-w-sm ml-1 mb-1">
+                            <PermissionRequestCard
+                                permission={message.permissionRequest}
+                                onAuthorized={onPermissionAuthorized}
+                            />
                         </div>
                     )}
 

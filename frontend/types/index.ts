@@ -10,6 +10,17 @@ export interface AgentInfo {
 
 export type MessageRole = "user" | "assistant";
 
+export interface PermissionRequest {
+    consentUrl: string;
+    secretKey: string;
+    scopes: string[];
+    provider: string;
+    displayName: string;
+    description: string;
+    icon: string;
+    message: string;
+}
+
 export interface ToolCall {
     id: string;
     name: string;
@@ -28,6 +39,7 @@ export interface ChatMessage {
     streaming?: boolean;
     timestamp: Date;
     toolCalls?: ToolCall[];
+    permissionRequest?: PermissionRequest;
 }
 
 export interface Session {

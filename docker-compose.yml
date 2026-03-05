@@ -13,6 +13,7 @@ services:
       args:
         - NEXT_PUBLIC_API_URL=/api
         - NEXT_PUBLIC_AUTH_SERVICE_URL=/auth
+        - NEXT_PUBLIC_OAUTH_CALLBACK_URL=${OAUTH_CALLBACK_BASE_URL:-}
     container_name: multi-agent-frontend
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
@@ -20,7 +21,11 @@ services:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=/api
       - NEXT_PUBLIC_AUTH_SERVICE_URL=/auth
+      - NEXT_PUBLIC_OAUTH_CALLBACK_URL=${OAUTH_CALLBACK_BASE_URL:-}
+      - SECRETS_MANAGER_URL=http://secrets-manager:8092
     restart: unless-stopped
+    depends_on:
+      - secrets-manager
     networks:
       - multi-agent-network
     labels:
@@ -156,6 +161,13 @@ services:
       - MONGODB_COLLECTION=secrets
       - SECRETS_MANAGER_API_KEY=${SECRETS_MANAGER_API_KEY:-}
       - SECRETS_ENCRYPTION_KEY=${SECRETS_ENCRYPTION_KEY:-}
+      # OAuth2 Configuration
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID:-}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET:-}
+      - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID:-common}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
     restart: unless-stopped
     depends_on:
       secrets-mongo:
@@ -181,6 +193,7 @@ services:
       - SERVICE_PORT=8090
       - SECRETS_MANAGER_URL=http://secrets-manager:8092
       - SECRETS_MANAGER_API_KEY=${SECRETS_MANAGER_API_KEY:-}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
     restart: unless-stopped
     depends_on:
       - secrets-manager

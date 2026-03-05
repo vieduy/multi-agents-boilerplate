@@ -1,11 +1,12 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-import { ToolCall } from "@/types";
+import { PermissionRequest, ToolCall } from "@/types";
 
 export interface StreamCallbacks {
     onChunk: (text: string) => void;
     onAgent?: (agentId: string, route: string) => void;
     onToolCall?: (toolCall: ToolCall) => void;
+    onPermissionRequired?: (permission: PermissionRequest) => void;
     onDone: () => void;
     onError: (err: Error) => void;
 }
@@ -61,7 +62,27 @@ export async function streamRoute(
      * - { text: null, skip: true, toolCall?: ToolCall } if it's metadata or a tool call.
      * - { text: null, skip: false } if unrecognized.
      */
-    function parseResponse(data: Record<string, unknown>): { text: string | null; skip: boolean; toolCall?: ToolCall } {
+    function extractPermission(raw: unknown): PermissionRequest | null {
+        let d: Record<string, unknown> | null = null;
+        if (typeof raw === "string") {
+            try { d = JSON.parse(raw); } catch { return null; }
+        } else if (raw && typeof raw === "object") {
+            d = raw as Record<string, unknown>;
+        }
+        if (!d || d.action_required !== "oauth_consent" || !d.consent_url) return null;
+        return {
+            consentUrl: String(d.consent_url),
+            secretKey: String(d.secret_key ?? ""),
+            scopes: Array.isArray(d.scopes) ? d.scopes.map(String) : [],
+            provider: String(d.provider ?? "microsoft"),
+            displayName: String(d.display_name ?? ""),
+            description: String(d.description ?? ""),
+            icon: String(d.icon ?? ""),
+            message: String(d.message ?? ""),
+        };
+    }
+
+    function parseResponse(data: Record<string, unknown>): { text: string | null; skip: boolean; toolCall?: ToolCall; permission?: PermissionRequest } {
         try {
             const agentResponse = data?.agent_response as Record<string, unknown> | undefined;
             const result = agentResponse?.result as Record<string, unknown> | undefined;
@@ -86,16 +107,19 @@ export async function streamRoute(
 
                     if (item?.type === "tool_call_result" && item.tool_call_result) {
                         const res = item.tool_call_result as any;
+                        const resultContent = res.content || res.output || "{}";
+                        const perm = extractPermission(resultContent);
                         return {
                             text: null,
                             skip: true,
                             toolCall: {
                                 id: res.id,
-                                name: "", // will be merged in state
+                                name: "",
                                 arguments: "",
-                                result: res.content || res.output || "{}",
-                                status: "success"
-                            }
+                                result: typeof resultContent === "string" ? resultContent : JSON.stringify(resultContent),
+                                status: perm ? "error" : "success"
+                            },
+                            permission: perm ?? undefined,
                         };
                     }
 
@@ -144,7 +168,7 @@ export async function streamRoute(
     if (!isSSE || !response.body) {
         // Non-streaming fallback: parse as JSON
         const data = await response.json();
-        const { text, skip, toolCall } = parseResponse(data);
+        const { text, skip, toolCall, permission } = parseResponse(data);
 
         // Update agent/route info
         const route = data?.route ?? (data?.agent_response as any)?.route;
@@ -153,11 +177,11 @@ export async function streamRoute(
         if (route && typeof route === "string") {
             callbacks.onAgent?.(agentId || route, route);
         } else if (agentId && typeof agentId === "string") {
-            // Metadata-only event (no route but has agent info)
             callbacks.onAgent?.(agentId, route || "unknown");
         }
 
         if (toolCall) callbacks.onToolCall?.(toolCall);
+        if (permission) callbacks.onPermissionRequired?.(permission);
 
         if (skip) {
             callbacks.onDone();
@@ -234,9 +258,10 @@ export async function streamRoute(
 
                             try {
                                 const parsed = JSON.parse(jsonStr);
-                                const { text, skip, toolCall } = parseResponse(parsed);
+                                const { text, skip, toolCall, permission } = parseResponse(parsed);
 
                                 if (toolCall) callbacks.onToolCall?.(toolCall);
+                                if (permission) callbacks.onPermissionRequired?.(permission);
                                 if (!skip && text) callbacks.onChunk(text);
 
                                 // Metadata update - extract both agent_id and route
